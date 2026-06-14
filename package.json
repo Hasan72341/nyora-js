@@ -1,0 +1,85 @@
+{
+  "name": "nyora",
+  "version": "0.1.0",
+  "description": "JavaScript/TypeScript SDK, CLI and TUI for Nyora manga sources. Runs Nyora's over-the-air (OTA) parser bundle in-process via jsdom — no JVM helper required — with an OTA updater, a helper-compatible REST server, and an interactive terminal UI.",
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "author": "Md Hasan Raza",
+  "homepage": "https://nyora.pages.dev/docs/js/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hasan72341/nyora-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Hasan72341/nyora-js/issues"
+  },
+  "keywords": [
+    "manga",
+    "nyora",
+    "reader",
+    "cli",
+    "tui",
+    "ota",
+    "scraper",
+    "parsers",
+    "sources",
+    "jsdom",
+    "sdk"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "nyora-cli": "dist/cli.js",
+    "nyora": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "assets",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint \"src/**/*.ts\"",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "dev": "tsx",
+    "docs": "typedoc --entryPoints src/index.ts --out docs/api",
+    "docs:site": "typedoc --entryPoints src/index.ts --out ../nyora-site/public/docs/js"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.5.2",
+    "env-paths": "^3.0.0",
+    "jsdom": "^24.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.0",
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^20.14.0",
+    "eslint": "^9.9.0",
+    "prettier": "^3.3.0",
+    "tsx": "^4.16.0",
+    "typedoc": "^0.28.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^2.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

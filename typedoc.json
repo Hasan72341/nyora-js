@@ -1,0 +1,35 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts", "src/cli.ts", "src/server.ts"],
+  "tsconfig": "./tsconfig.json",
+  "out": "/Users/hasanraza/Desktop/kotatsu/Nyora/nyora-site/public/docs/js",
+  "name": "Nyora (JavaScript)",
+  "includeVersion": true,
+  "readme": "./docs/index.md",
+  "customCss": "./docs/brand.css",
+  "hideGenerator": false,
+  "projectDocuments": [
+    "docs/quickstart.md",
+    "docs/library.md",
+    "docs/cli.md",
+    "docs/tui.md",
+    "docs/server.md",
+    "docs/ota.md",
+    "docs/agents.md"
+  ],
+  "navigationLinks": {
+    "Docs home": "https://nyora.pages.dev/docs/js/",
+    "Python docs": "https://nyora.pages.dev/docs/python/",
+    "nyora.pages.dev": "https://nyora.pages.dev"
+  },
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": true,
+    "includeFolders": false
+  },
+  "categorizeByGroup": true,
+  "sort": ["source-order"],
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "githubPages": false
+}

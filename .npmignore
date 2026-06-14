@@ -1,0 +1,46 @@
+# The published tarball is driven by the "files" whitelist in package.json
+# (dist, assets, README.md, LICENSE). This .npmignore is a defensive backstop
+# so nothing source/dev-related ever leaks into the npm package.
+
+# Source & build inputs
+src/
+tests/
+test/
+*.test.ts
+*.spec.ts
+tsconfig.json
+tsconfig.*.json
+vitest.config.ts
+vitest.config.js
+
+# Lint / format config
+eslint.config.js
+.eslintrc.json
+.eslintrc.cjs
+.prettierrc.json
+.prettierignore
+
+# Docs source / generated docs
+docs/
+typedoc.json
+typedoc.config.*
+
+# Tooling & meta
+.github/
+.vscode/
+.idea/
+.editorconfig
+.gitignore
+.npmignore
+*.log
+*.tsbuildinfo
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Local caches / coverage
+coverage/
+.nyc_output/
+.cache/
+node_modules/

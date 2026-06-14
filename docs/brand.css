@@ -1,0 +1,241 @@
+/*
+ * Nyora (JavaScript) — TypeDoc theme override.
+ * Matches the nyora-site brand: dark #0e100f, #fffce1 text, green→lilac
+ * gradient accents, 18px radius, "Mori" font, ui-monospace code.
+ *
+ * Fonts are referenced from the same origin (/fonts/...) so the built docs
+ * served at https://nyora.pages.dev/docs/js/ pick up nyora-site's PPMori files.
+ */
+
+@font-face {
+  font-family: "Mori";
+  src: url("/fonts/PPMori-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Mori";
+  src: url("/fonts/PPMori-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --nyora-bg: #0e100f;
+  --nyora-text: #fffce1;
+  --nyora-dim: rgba(255, 252, 225, 0.66);
+  --nyora-border: rgba(255, 252, 225, 0.1);
+  --nyora-green: #0ae448;
+  --nyora-blue: #00bae2;
+  --nyora-lilac: #9d95ff;
+  --nyora-gradient: linear-gradient(115deg, #0ae448, #9d95ff);
+  --nyora-radius: 18px;
+  --nyora-radius-lg: 28px;
+  --nyora-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Map TypeDoc's design tokens onto the Nyora palette (light + dark). */
+:root,
+:root[data-theme="light"],
+:root[data-theme="dark"],
+body.dark,
+body.light {
+  --color-background: var(--nyora-bg);
+  --color-background-secondary: #15171600;
+  --color-background-warning: rgba(157, 149, 255, 0.12);
+  --color-warning-text: var(--nyora-text);
+  --color-accent: var(--nyora-border);
+  --color-active-menu-item: rgba(10, 228, 72, 0.14);
+  --color-text: var(--nyora-text);
+  --color-text-aside: var(--nyora-dim);
+  --color-link: var(--nyora-green);
+  --color-focus-outline: var(--nyora-lilac);
+  --color-ts-keyword: var(--nyora-lilac);
+  --color-ts-function: var(--nyora-blue);
+  --color-ts-interface: var(--nyora-green);
+  --color-ts-class: var(--nyora-blue);
+  --color-ts-type-alias: var(--nyora-green);
+  --color-ts-variable: var(--nyora-text);
+  --color-ts-property: var(--nyora-text);
+}
+
+html,
+body {
+  background: var(--nyora-bg);
+  color: var(--nyora-text);
+  font-family: "Mori", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Headings: semibold Mori. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.tsd-page-title h1 {
+  font-family: "Mori", system-ui, sans-serif;
+  font-weight: 600;
+  color: var(--nyora-text);
+  letter-spacing: -0.01em;
+}
+
+/* Gradient page title for a branded landing. */
+.tsd-page-title h1 {
+  background: var(--nyora-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+a {
+  color: var(--nyora-green);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--nyora-lilac);
+}
+
+/* Top bar / toolbar — glassy. */
+.tsd-page-toolbar {
+  background: rgba(14, 16, 15, 0.72);
+  backdrop-filter: saturate(140%) blur(10px);
+  border-bottom: 1px solid var(--nyora-border);
+}
+
+.tsd-page-toolbar a.title {
+  font-weight: 600;
+  color: var(--nyora-text);
+}
+
+/* Navigation links in the header use the brand green. */
+.tsd-navigation a,
+.tsd-page-navigation a {
+  color: var(--nyora-dim);
+  border-radius: 10px;
+}
+
+.tsd-navigation a:hover,
+.tsd-page-navigation a:hover {
+  color: var(--nyora-text);
+  text-decoration: none;
+}
+
+.tsd-navigation a.current,
+.tsd-navigation .tsd-nav-link.current {
+  color: var(--nyora-text);
+  background: rgba(10, 228, 72, 0.12);
+}
+
+/* Code: monospace, dark glassy panels with generous radius. */
+code,
+pre,
+.tsd-typography code,
+.tsd-signature {
+  font-family: var(--nyora-mono);
+}
+
+pre {
+  background: rgba(255, 252, 225, 0.04) !important;
+  border: 1px solid var(--nyora-border);
+  border-radius: var(--nyora-radius);
+  padding: 16px 18px;
+}
+
+:not(pre) > code {
+  background: rgba(255, 252, 225, 0.06);
+  border: 1px solid var(--nyora-border);
+  border-radius: 8px;
+  padding: 0.12em 0.4em;
+  color: var(--nyora-text);
+}
+
+/* Signatures, member panels, and cards. */
+.tsd-signature,
+.tsd-panel,
+.tsd-member,
+.tsd-description > .tsd-comment {
+  background: rgba(255, 252, 225, 0.02);
+  border: 1px solid var(--nyora-border);
+  border-radius: var(--nyora-radius);
+}
+
+.tsd-panel {
+  padding: 18px 20px;
+}
+
+/* Section accents: a thin gradient rule under H2s. */
+.tsd-typography h2 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--nyora-border);
+}
+
+/* Tables — readable on dark. */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  border-radius: var(--nyora-radius);
+  overflow: hidden;
+}
+
+th,
+td {
+  border: 1px solid var(--nyora-border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+th {
+  background: rgba(157, 149, 255, 0.1);
+  color: var(--nyora-text);
+  font-weight: 600;
+}
+
+/* Search box and inputs. */
+#tsd-search .field input,
+.tsd-filter-input input,
+input[type="text"] {
+  background: rgba(255, 252, 225, 0.04);
+  color: var(--nyora-text);
+  border: 1px solid var(--nyora-border);
+  border-radius: 10px;
+}
+
+/* Badges (tags like "Defined in", "Optional"). */
+.tsd-tag,
+.tsd-anchor-icon {
+  border-radius: 999px;
+}
+
+.tsd-tag {
+  background: rgba(0, 186, 226, 0.12);
+  color: var(--nyora-blue);
+  border: 1px solid var(--nyora-border);
+}
+
+/* Footer. */
+footer,
+.tsd-generator {
+  color: var(--nyora-dim);
+  border-top: 1px solid var(--nyora-border);
+}
+
+/* Blockquotes (notes/callouts) get a lilac edge. */
+blockquote {
+  border-left: 3px solid var(--nyora-lilac);
+  background: rgba(157, 149, 255, 0.06);
+  border-radius: 0 var(--nyora-radius) var(--nyora-radius) 0;
+  padding: 10px 16px;
+  color: var(--nyora-text);
+}
+
+/* Scrollbar polish. */
+* {
+  scrollbar-color: rgba(255, 252, 225, 0.18) transparent;
+}
