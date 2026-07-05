@@ -4,23 +4,22 @@ title: CLI
 
 # `nyora-cli` — command-line manual
 
-`nyora-cli` is the independent Nyora command-line tool. It drives the same
-embedded JavaScript parser runtime as the [library](library.md) — no helper
-required — through a small subcommand tree, and it doubles as the launcher for
-the interactive [terminal reader (TUI)](tui.md).
+`nyora-cli` is the Nyora command-line tool. It drives the same Nyora cloud
+helper as the [library](library.md) through a small subcommand tree, and it
+doubles as the launcher for the interactive [terminal reader (TUI)](tui.md).
 
 The `nyora` binary is an alias for `nyora-cli`.
 
 ## Install
 
 ```bash
-npm install -g nyora     # global: puts `nyora-cli` (and `nyora`) on PATH
+npm install -g nyora-sdk     # global: puts `nyora-cli` (and `nyora`) on PATH
 ```
 
 Or run without installing:
 
 ```bash
-npx nyora sources
+npx nyora-sdk sources
 ```
 
 ## Usage
@@ -183,44 +182,7 @@ Pages that fail to fetch are reported on stderr and skipped; the command exits
 `0` if **any** page was packed into the archive, `1` if none could be
 downloaded.
 
-### `update` — apply OTA parser updates
-
-```text
-nyora-cli update [--force]
-```
-
-| Flag | Meaning |
-|---|---|
-| `--force` | Re-download and reload even if already current. |
-
-```bash
-nyora-cli update
-nyora-cli update --force
-nyora-cli --json update           # { updated, version, bundlePath, sourcesPath }
-```
-
-### `serve` — run the helper-compatible REST server
-
-```text
-nyora-cli serve [--host H] [--port N]
-```
-
-| Flag | Meaning |
-|---|---|
-| `--host H` | Bind interface (default `127.0.0.1`). |
-| `--port N` | Bind port; `0` picks a free port (default `0`). |
-
-```bash
-nyora-cli serve                       # ephemeral port on loopback
-nyora-cli serve --host 0.0.0.0 --port 8787
-nyora-cli --json serve                # { "baseUrl": "http://127.0.0.1:54123" }
-```
-
-Prints the base URL, writes a `helper.port` discovery file, and runs until
-`Ctrl+C` (`SIGINT`/`SIGTERM`). See the **[Server guide](server.md)** for the
-endpoint table and a worked attach example.
-
-### `version` — show package and OTA versions
+### `version` — show the package version
 
 ```text
 nyora-cli version
@@ -228,18 +190,17 @@ nyora-cli version
 
 ```bash
 nyora-cli version
-nyora-cli --json version          # { package: "0.1.0", ota: 7 }
+nyora-cli --json version          # { package: "2.0.0" }
 ```
 
-Prints the package version and the installed OTA parser version (`bundled` when
-no update has been applied yet).
+Prints the installed package version.
 
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | `0` | Success (or `--help`, or a clean TUI exit / non-TTY notice). |
-| `1` | A handled error: missing/invalid flag, no results to download, or an SDK/parser failure. Printed as `error: <message>` on stderr (no stack trace). |
+| `1` | A handled error: missing/invalid flag, no results to download, or a helper/network failure. Printed as `error: <message>` on stderr (no stack trace). |
 | `2` | Unknown command (usage is printed on stderr). |
 
 ## Recipes
@@ -268,10 +229,10 @@ nyora-cli download -s mangadex -o ./frieren "$CH"            # writes ./frieren/
 FILE=$(nyora-cli --json download -s mangadex "$CH" | jq -r '.file')   # capture the .cbz path
 ```
 
-**Keep parsers fresh in CI before a scripted run:**
+**Point at a self-hosted helper:**
 
 ```bash
-nyora-cli update && nyora-cli --json sources | jq 'length'
+NYORA_BASE_URL=http://127.0.0.1:8080 nyora-cli --json sources | jq 'length'
 ```
 
 > When stdout is **not** a TTY (piped, redirected, CI), running bare `nyora-cli`

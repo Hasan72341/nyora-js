@@ -15,6 +15,7 @@
  */
 
 import { Nyora } from "./client.js";
+import { NyoraSync } from "./sync.js";
 import type { Manga, MangaChapter, MangaDetails, SearchPage, Source } from "./types.js";
 
 /** A control sentinel returned by the choice prompts. */
@@ -23,6 +24,53 @@ const QUIT = Symbol("quit");
 const SEARCH = Symbol("search");
 const NEXT = Symbol("next");
 const PREV = Symbol("prev");
+const ACCOUNT = Symbol("account");
+const LIBRARY = Symbol("library");
+
+/** Push `manga` to the cloud library and favourite it. */
+async function favourite(sync: NyoraSync, sourceId: string, manga: Manga): Promise<void> {
+  const now = new Date().toISOString();
+  const id = manga.url;
+  await sync.upsert("nyora_manga", [
+    {
+      id,
+      title: manga.title,
+      url: id,
+      public_url: manga.url,
+      cover_url: manga.coverUrl ?? "",
+      authors: JSON.stringify(manga.authors ?? []),
+      description: manga.description ?? "",
+      source_ref: JSON.stringify({ source: sourceId }),
+      updated_at: now,
+    },
+  ]);
+  await sync.upsert("nyora_favourite", [
+    { manga_id: id, added_at: now, sort_key: 0, updated_at: now },
+  ]);
+}
+
+/** Pull the synced favourites joined with their manga metadata. */
+async function pullLibrary(
+  sync: NyoraSync,
+): Promise<{ id: string; title: string; url: string; source: string }[]> {
+  const favs = (await sync.select("nyora_favourite")).filter((f) => !f.deleted_at);
+  const manga = new Map((await sync.select("nyora_manga")).map((m) => [m.id as string, m]));
+  return favs.map((f) => {
+    const meta = manga.get(f.manga_id as string) ?? {};
+    let source = "";
+    try {
+      source = JSON.parse(String(meta.source_ref ?? "{}")).source ?? "";
+    } catch {
+      /* ignore */
+    }
+    return {
+      id: String(f.manga_id ?? ""),
+      title: String(meta.title ?? f.manga_id ?? ""),
+      url: String(meta.url ?? f.manga_id ?? ""),
+      source,
+    };
+  });
+}
 
 /**
  * Whether an interactive terminal is attached.
@@ -111,8 +159,9 @@ export async function run(): Promise<number> {
   // Imported lazily so a non-TTY caller never loads the prompt library.
   const prompts = await import("@inquirer/prompts");
   const client = new Nyora();
+  const sync = new NyoraSync();
   try {
-    process.stdout.write("Nyora terminal reader — embedded JS parser runtime\n\n");
+    process.stdout.write("Nyora terminal reader — Nyora cloud sources\n\n");
     const [loaded, err] = await safe(() => client.sources.list());
     if (err || !loaded) {
       process.stdout.write(`Failed to load sources: ${err ?? "unknown error"}\n`);
@@ -122,10 +171,18 @@ export async function run(): Promise<number> {
 
     // Source loop.
     for (;;) {
-      const source = await pickSource(prompts, sources);
+      const source = await pickSource(prompts, sources, sync);
       if (source === QUIT) return 0;
       if (source === BACK) continue;
-      await browse(prompts, client, source);
+      if (source === ACCOUNT) {
+        await account(prompts, sync);
+        continue;
+      }
+      if (source === LIBRARY) {
+        await library(prompts, client, sync);
+        continue;
+      }
+      await browse(prompts, client, source, sync);
     }
   } catch (err) {
     // ExitPromptError (Ctrl+C / Ctrl+D) and friends end the session cleanly.
@@ -148,28 +205,37 @@ function isAbort(err: unknown): boolean {
 
 type Prompts = typeof import("@inquirer/prompts");
 
+type SourceChoice = Source | typeof BACK | typeof QUIT | typeof ACCOUNT | typeof LIBRARY;
+
 /** Prompt for a source: filter by text, then choose from the matches. */
 async function pickSource(
   prompts: Prompts,
   sources: Source[],
-): Promise<Source | typeof BACK | typeof QUIT> {
+  sync: NyoraSync,
+): Promise<SourceChoice> {
+  const who = sync.isSignedIn ? ` (${sync.email})` : "";
   const query = await prompts.input({
-    message: "Filter sources (blank = all, type 'q' to quit):",
+    message: `Filter sources${who} (blank = all, 'sync'/'lib', 'q' quit):`,
   });
-  if (query.trim().toLowerCase() === "q") return QUIT;
+  const q = query.trim().toLowerCase();
+  if (q === "q") return QUIT;
+  if (q === "sync" || q === "account") return ACCOUNT;
+  if (q === "lib" || q === "library") return LIBRARY;
   const matches = filterSources(sources, query);
   if (!matches.length) {
     process.stdout.write("No sources matched.\n");
     return BACK;
   }
-  const choice = await prompts.select<Source | typeof BACK | typeof QUIT>({
+  const choice = await prompts.select<SourceChoice>({
     message: "Pick a source",
     pageSize: 15,
     choices: [
       ...matches.slice(0, 200).map((s) => ({
         name: `${s.name}${s.lang ? ` [${s.lang}]` : ""}${s.isNsfw ? " (18+)" : ""}  ${s.id}`,
-        value: s as Source | typeof BACK | typeof QUIT,
+        value: s as SourceChoice,
       })),
+      { name: "⚙ account (sync)", value: ACCOUNT },
+      { name: "★ library", value: LIBRARY },
       { name: "< back to filter", value: BACK },
       { name: "quit", value: QUIT },
     ],
@@ -177,8 +243,57 @@ async function pickSource(
   return choice;
 }
 
+/** Sign in/out of Nyora cloud sync. */
+async function account(prompts: Prompts, sync: NyoraSync): Promise<void> {
+  if (sync.isSignedIn) {
+    const out = await prompts.confirm({ message: `Signed in as ${sync.email}. Sign out?`, default: false });
+    if (out) {
+      sync.signOut();
+      process.stdout.write("Signed out.\n");
+    }
+    return;
+  }
+  const email = (await prompts.input({ message: "Email (blank to cancel):" })).trim();
+  if (!email) return;
+  const password = await prompts.password({ message: "Password:" });
+  const [, err] = await safe(() => sync.signIn(email, password));
+  process.stdout.write(err ? `Sign-in failed: ${err}\n` : `Signed in as ${sync.email}.\n`);
+}
+
+/** Browse the synced favourites library. */
+async function library(prompts: Prompts, client: Nyora, sync: NyoraSync): Promise<void> {
+  if (!sync.isSignedIn) {
+    process.stdout.write("Sign in first ('sync').\n");
+    return;
+  }
+  const [items, err] = await safe(() => pullLibrary(sync));
+  if (err || !items) {
+    process.stdout.write(`Failed to load library: ${err ?? "unknown error"}\n`);
+    return;
+  }
+  if (!items.length) {
+    process.stdout.write("Library is empty. Favourite manga from details.\n");
+    return;
+  }
+  for (;;) {
+    const choice = await prompts.select<(typeof items)[number] | typeof BACK>({
+      message: `Library (${items.length})`,
+      pageSize: 15,
+      choices: [
+        ...items.map((it) => ({ name: `${it.title}  [${it.source || "?"}]`, value: it })),
+        { name: "< back", value: BACK },
+      ],
+    });
+    if (choice === BACK) return;
+    const [details] = await safe<MangaDetails>(() => client.manga.details(choice.source, choice.url));
+    if (details) {
+      process.stdout.write(`\n=== ${details.manga.title} === (${details.chapters.length} chapters)\n`);
+    }
+  }
+}
+
 /** Results loop for one source: search/popular, paging, and selection. */
-async function browse(prompts: Prompts, client: Nyora, source: Source): Promise<void> {
+async function browse(prompts: Prompts, client: Nyora, source: Source, sync: NyoraSync): Promise<void> {
   let query = "";
   let page = 1;
 
@@ -218,7 +333,7 @@ async function browse(prompts: Prompts, client: Nyora, source: Source): Promise<
       page = Math.max(1, page - 1);
       continue;
     }
-    await showDetails(prompts, client, source, picked);
+    await showDetails(prompts, client, source, picked, sync);
   }
 }
 
@@ -252,6 +367,7 @@ async function showDetails(
   client: Nyora,
   source: Source,
   manga: Manga,
+  sync: NyoraSync,
 ): Promise<void> {
   const [details, err] = await safe<MangaDetails>(() =>
     client.manga.details(source.id, manga.url, { title: manga.title }),
@@ -270,6 +386,14 @@ async function showDetails(
     .join(", ");
   if (tags) process.stdout.write(`Tags: ${tags}\n`);
   process.stdout.write(`\n${m.description || "(no description)"}\n`);
+
+  if (sync.isSignedIn) {
+    const fav = await prompts.confirm({ message: "Favourite to library?", default: false });
+    if (fav) {
+      const [, ferr] = await safe(() => favourite(sync, source.id, m));
+      process.stdout.write(ferr ? `Sync failed: ${ferr}\n` : "Added to library.\n");
+    }
+  }
 
   if (!details.chapters.length) {
     process.stdout.write("No chapters found.\n");

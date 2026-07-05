@@ -25,8 +25,12 @@ import * as os from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { Nyora } from "./client.js";
-import { BROWSER_UA } from "./runtime.js";
 import type { Manga, MangaChapter, MangaPage, SearchPage, Source } from "./types.js";
+
+/** User-Agent for direct image downloads. */
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 /** Friendly, no-stack error wrapper recognized by {@link main}. */
 class CliError extends Error {}
@@ -363,7 +367,7 @@ async function cmdSources(argv: string[], globals: GlobalFlags): Promise<number>
   const args = parseFlags(argv);
   const client = new Nyora();
   try {
-    let sources = client.sources.list();
+    let sources = await client.sources.list();
     const search = args.flags.get("search");
     if (typeof search === "string" && search.length) {
       const needle = search.toLowerCase();
@@ -388,7 +392,7 @@ async function cmdSearch(argv: string[], globals: GlobalFlags): Promise<number> 
   if (!query) throw new CliError("a search query is required");
   const client = new Nyora();
   try {
-    const source = client.sources.find(requireSource(args));
+    const source = await client.sources.find(requireSource(args));
     const page = await client.manga.search(source.id, query, pageOf(args));
     if (globals.json) printJson(page);
     else renderEntries(page, `Search: ${query}`);
@@ -402,7 +406,7 @@ async function cmdPopular(argv: string[], globals: GlobalFlags): Promise<number>
   const args = parseFlags(argv, { aliases: { s: "source", p: "page" } });
   const client = new Nyora();
   try {
-    const source = client.sources.find(requireSource(args));
+    const source = await client.sources.find(requireSource(args));
     const page = await client.manga.popular(source.id, pageOf(args));
     if (globals.json) printJson(page);
     else renderEntries(page, `Popular (${source.name})`);
@@ -416,7 +420,7 @@ async function cmdLatest(argv: string[], globals: GlobalFlags): Promise<number> 
   const args = parseFlags(argv, { aliases: { s: "source", p: "page" } });
   const client = new Nyora();
   try {
-    const source = client.sources.find(requireSource(args));
+    const source = await client.sources.find(requireSource(args));
     const page = await client.manga.latest(source.id, pageOf(args));
     if (globals.json) printJson(page);
     else renderEntries(page, `Latest (${source.name})`);
@@ -432,7 +436,7 @@ async function cmdDetails(argv: string[], globals: GlobalFlags): Promise<number>
   if (!url) throw new CliError("a manga URL is required");
   const client = new Nyora();
   try {
-    const source = client.sources.find(requireSource(args));
+    const source = await client.sources.find(requireSource(args));
     const details = await client.manga.details(source.id, url);
     if (globals.json) printJson(details);
     else renderDetails(details.manga, details.chapters);
@@ -449,7 +453,7 @@ async function cmdPages(argv: string[], globals: GlobalFlags): Promise<number> {
   const branch = args.flags.get("branch");
   const client = new Nyora();
   try {
-    const source = client.sources.find(requireSource(args));
+    const source = await client.sources.find(requireSource(args));
     const pages = await client.manga.pages(source.id, chapterUrl, {
       branch: typeof branch === "string" ? branch : null,
     });
@@ -477,7 +481,7 @@ async function cmdDownload(argv: string[], globals: GlobalFlags): Promise<number
   const client = new Nyora();
   let pages: MangaPage[];
   try {
-    const source = client.sources.find(requireSource(args));
+    const source = await client.sources.find(requireSource(args));
     pages = await client.manga.pages(source.id, chapterUrl, {
       branch: typeof branch === "string" ? branch : null,
     });
@@ -502,74 +506,13 @@ async function cmdDownload(argv: string[], globals: GlobalFlags): Promise<number
   return 0;
 }
 
-async function cmdUpdate(argv: string[], globals: GlobalFlags): Promise<number> {
-  const args = parseFlags(argv, { booleans: ["force"] });
-  const client = new Nyora();
-  try {
-    const result = await client.update({ force: Boolean(args.flags.get("force")) });
-    const payload = {
-      updated: result.updated,
-      version: result.version,
-      bundlePath: result.bundlePath,
-      sourcesPath: result.sourcesPath,
-    };
-    if (globals.json) {
-      printJson(payload);
-      return 0;
-    }
-    if (result.updated) print(`Updated to OTA version ${result.version}`);
-    else print(`Already up to date (OTA version ${result.version})`);
-    print(`  bundle:  ${result.bundlePath}`);
-    print(`  sources: ${result.sourcesPath}`);
-    return 0;
-  } finally {
-    client.close();
-  }
-}
-
-async function cmdServe(argv: string[], globals: GlobalFlags): Promise<number> {
-  const args = parseFlags(argv);
-  const { NyoraServer } = await import("./server.js");
-  const hostFlag = args.flags.get("host");
-  const portFlag = args.flags.get("port");
-  const server = new NyoraServer({
-    host: typeof hostFlag === "string" ? hostFlag : "127.0.0.1",
-    port: portFlag === undefined ? 0 : Number(portFlag),
-  });
-  const baseUrl = await server.start();
-  if (globals.json) {
-    printJson({ baseUrl });
-  } else {
-    print(`Nyora server listening at ${baseUrl}`);
-    print("Press Ctrl+C to stop.");
-  }
-  await new Promise<void>((resolve) => {
-    const shutdown = (): void => {
-      print("\nStopping...");
-      resolve();
-    };
-    process.once("SIGINT", shutdown);
-    process.once("SIGTERM", shutdown);
-  });
-  await server.stop();
-  return 0;
-}
-
 async function cmdVersion(_argv: string[], globals: GlobalFlags): Promise<number> {
   const packageVersion = await readPackageVersion();
-  let otaVersion: number | null = null;
-  try {
-    const { OtaManager } = await import("./ota.js");
-    otaVersion = new OtaManager().installedVersion();
-  } catch {
-    otaVersion = null;
-  }
   if (globals.json) {
-    printJson({ package: packageVersion, ota: otaVersion });
+    printJson({ package: packageVersion });
     return 0;
   }
   print(`nyora ${packageVersion}`);
-  print(`OTA parsers: ${otaVersion ?? "bundled"}`);
   return 0;
 }
 
@@ -601,8 +544,6 @@ const HANDLERS: Record<string, Handler> = {
   details: cmdDetails,
   pages: cmdPages,
   download: cmdDownload,
-  update: cmdUpdate,
-  serve: cmdServe,
   version: cmdVersion,
 };
 

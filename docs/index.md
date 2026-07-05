@@ -7,18 +7,19 @@ title: Nyora for JavaScript
 ### Read like the world can wait.
 
 The official **Node.js** package for [Nyora](https://nyora.pages.dev) — script your library,
-search 1000+ manga sources, and fetch chapters and pages straight from
-JavaScript or TypeScript. Self-contained: no JVM, no desktop app, no Java. Just
-`npm install`.
+search ~960 manga sources, and fetch chapters and pages straight from
+JavaScript or TypeScript. A thin **cloud client**: no local engine to compile, no
+companion app to launch. Just `npm install`.
 
 ```bash
-npm install nyora
+npm install nyora-sdk
 ```
 
-This single install gives you **two** things, documented as clearly separate surfaces:
+This single install gives you **three** things, documented as clearly separate surfaces:
 
-1. A **library** you import (`import { Nyora } from "nyora"`).
+1. A **library** you import (`import { Nyora } from "nyora-sdk"`).
 2. The **`nyora-cli`** command-line tool (and its terminal reader / TUI).
+3. **Cloud sync** (`NyoraSync`) — account + library sync across devices.
 
 > Looking for the Python twin? See **[nyora.pages.dev/docs/python](https://nyora.pages.dev/docs/python/)**.
 
@@ -26,43 +27,43 @@ This single install gives you **two** things, documented as clearly separate sur
 
 ## How it works
 
-Nyora runs the full Nyora **JavaScript parser bundle** in-process inside a
-[`jsdom`](https://github.com/jsdom/jsdom) window. HTTP is handled by Node's
-native `fetch`, HTML parsing by jsdom, and SHA-256 verification by `node:crypto`
-— so there is nothing to compile and no companion app to launch. The parser
-bundle and source catalog update **over the air** (OTA), so new and fixed
-sources arrive without upgrading the package. A pinned copy of the bundle ships
-inside the package, so it also works fully offline on first run.
+Nyora is a **cloud-only** SDK. The default {@link Nyora} client is a thin wrapper
+over Node's native `fetch` that talks to the Nyora cloud helper
+(`https://api.hasanraza.tech`). The helper runs the kotatsu-parsers engine
+(~960 sources) server-side, so the package has nothing to compile and no
+companion app to launch. Point the client at your own helper by passing
+`baseUrl` or setting `NYORA_BASE_URL`.
+
+A separate {@link NyoraSync} client signs in against the Nyora sync server
+(`https://stream.hasanraza.tech`) so your favourites, history, and bookmarks
+follow you across devices.
 
 ---
 
-## Two paths
+## Three paths
 
-### Library (`npm install nyora`)
+### Library (`npm install nyora-sdk`)
 
-Import the SDK and drive the engine from your own code:
+Import the SDK and drive the cloud helper from your own code:
 
 ```ts
-import { Nyora } from "nyora";
+import { Nyora } from "nyora-sdk";
 
 const client = new Nyora();
-try {
-  const source = client.sources.find("mangadex");        // resolve by id or fuzzy name
-  const page = await client.manga.popular(source.id);    // SearchPage of entries
-  const entry = page.entries[0];
+const source = await client.sources.find("mangadex");   // resolve by id or fuzzy name
+const page = await client.manga.popular(source.id);     // SearchPage of entries
+const entry = page.entries[0];
 
-  const details = await client.manga.details(source.id, entry.url, { title: entry.title });
-  const pages = await client.manga.pages(source.id, details.chapters[0].url);
+const details = await client.manga.details(source.id, entry.url, { title: entry.title });
+const pages = await client.manga.pages(source.id, details.chapters[0].url);
 
-  for (const p of pages) console.log(p.url);
-} finally {
-  client.close();
-}
+for (const p of pages) console.log(p.url);
+client.close();   // no-op, kept for API compatibility
 ```
 
 The client exposes two typed services:
 
-- [`client.sources`](library.md) — `list()` the full bundled catalog, or `find(...)` a source by **id** or fuzzy **name**.
+- [`client.sources`](library.md) — `list()` the loaded sources, `catalog()` the full catalog, or `find(...)` a source by **id** or fuzzy **name**.
 - [`client.manga`](library.md) — `popular(...)`, `latest(...)`, `search(...)`, `details(...)`, and `pages(...)`.
 
 → **[Library guide](library.md)** · API reference: {@link Nyora}, {@link MangaService}, {@link SourcesService}
@@ -72,7 +73,7 @@ The client exposes two typed services:
 Install globally to get the `nyora-cli` command:
 
 ```bash
-npm install -g nyora
+npm install -g nyora-sdk
 ```
 
 ```bash
@@ -80,10 +81,25 @@ nyora-cli                              # bare command launches the interactive T
 nyora-cli sources --search asura       # list/filter sources
 nyora-cli popular -s mangadex          # browse a source
 nyora-cli --json search -s asura "Solo Leveling"
-nyora-cli serve --port 0               # run the helper-compatible REST server
+nyora-cli download -s mangadex "<chapter-url>"   # save a chapter as .cbz
 ```
 
 → **[CLI guide](cli.md)** · **[TUI guide](tui.md)**
+
+### Cloud sync (`NyoraSync`)
+
+Sign in once and sync your library across devices:
+
+```ts
+import { NyoraSync } from "nyora-sdk";
+
+const sync = new NyoraSync();
+await sync.signIn("you@example.com", "password");
+await sync.upsert("nyora_favourite", [{ manga_id: "…", added_at: new Date().toISOString() }]);
+const favs = await sync.select("nyora_favourite");
+```
+
+→ **[Sync guide](sync.md)** · API reference: {@link NyoraSync}
 
 ---
 
@@ -92,11 +108,10 @@ nyora-cli serve --port 0               # run the helper-compatible REST server
 | Guide | What it covers |
 |---|---|
 | **[Quickstart](quickstart.md)** | Install, first script, first CLI run. |
-| **[Library](library.md)** | The `Nyora` SDK: every service method, types, errors, OTA. |
+| **[Library](library.md)** | The `Nyora` cloud client: every service method, types, and errors. |
 | **[CLI](cli.md)** | The complete `nyora-cli` manual — every subcommand, flags, exit codes, recipes. |
-| **[TUI](tui.md)** | The interactive terminal reader: start, flow, navigation, non-TTY behavior. |
-| **[Server](server.md)** | `NyoraServer` + `nyora-cli serve`: endpoints, `helper.port`, attach example. |
-| **[OTA](ota.md)** | `OtaManager`: updates, cache, SHA-256 verification, offline fallback. |
+| **[TUI](tui.md)** | The interactive terminal reader: start, flow, navigation, sync, non-TTY behavior. |
+| **[Sync](sync.md)** | `NyoraSync`: register / sign in, `upsert`/`select`, tables, token storage. |
 | **[Agents](agents.md)** | Using Nyora from an AI agent / programmatically, with an intent cheat-sheet. |
 
 ---
@@ -105,12 +120,18 @@ nyora-cli serve --port 0               # run the helper-compatible REST server
 
 The full typed API is generated from the source by TypeDoc. Start with:
 
-- {@link Nyora} — the default SDK client.
+- {@link Nyora} — the default cloud SDK client.
 - {@link SourcesService} · {@link MangaService} — the two service surfaces.
-- {@link OtaManager} — over-the-air updates.
-- {@link ParserRuntime} — the embedded jsdom parser engine.
-- {@link NyoraServer} — the helper-compatible REST server.
+- {@link NyoraSync} — cloud account + library sync.
+- {@link CloudClient} — the underlying `fetch` transport.
 - Models: {@link Source}, {@link Manga}, {@link MangaChapter}, {@link MangaPage}, {@link SearchPage}, {@link MangaDetails}.
+
+---
+
+## Also in the Nyora family
+
+- **nyora-mihon** — an on-device APK that brings ~900 sources to stock Mihon.
+- **nyora-aidoku** — ~959 WASM `.aix` proxy sources for stock Aidoku.
 
 ---
 
@@ -120,5 +141,5 @@ The full typed API is generated from the source by TypeDoc. Start with:
 - 🐍 Python twin: **[nyora.pages.dev/docs/python](https://nyora.pages.dev/docs/python/)**
 - 🌐 Website: **[nyora.pages.dev](https://nyora.pages.dev)**
 
-Licensed under **GPL-3.0-only**. Nyora is not affiliated with any of the manga
+Licensed under **Apache-2.0**. Nyora is not affiliated with any of the manga
 sources it can access.

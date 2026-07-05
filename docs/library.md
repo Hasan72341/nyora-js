@@ -2,95 +2,105 @@
 title: Library
 ---
 
-# Library (`npm install nyora`)
+# Library (`npm install nyora-sdk`)
 
-The importable **Nyora SDK** drives Nyora's source/parser engine from your own
-Node.js code. It is fully self-contained: it runs the JavaScript parser bundle
-in-process inside a jsdom window, using Node's native `fetch` for HTTP — no JVM
-helper, no desktop app, no Java.
+The importable **Nyora SDK** drives Nyora's ~960 sources from your own Node.js
+code. It is a thin **cloud client**: the default {@link Nyora} client talks to the
+Nyora cloud helper (`https://api.hasanraza.tech`) over Node's native `fetch`. The
+helper runs the parser engine server-side, so there is nothing to compile and no
+companion app to launch.
 
 This guide documents the SDK surface. For the separate command-line tool, see the
-**[CLI guide](cli.md)**.
+**[CLI guide](cli.md)**; for account + library sync, see the **[Sync guide](sync.md)**.
 
 ## Import surface
 
-Everything you typically need is a named export from `nyora`:
+Everything you typically need is a named export from `nyora-sdk`:
 
 ```ts
 import {
   Nyora,            // default client (also the default export)
   SourcesService,   // client.sources
   MangaService,     // client.manga
-  OtaManager,       // over-the-air updates
-  NyoraServer,      // helper-compatible REST server
+  CloudClient,      // the underlying fetch transport
+  NyoraSync,        // cloud account + library sync
   NyoraError,       // base error
-  ParserRuntimeError,
-} from "nyora";
+  NyoraHTTPError,
+} from "nyora-sdk";
 
 // Types are exported too:
 import type {
   Source, Manga, MangaChapter, MangaPage, SearchPage, MangaDetails,
-  OtaManifest, OtaUpdateResult, OtaUpdateAvailability,
-} from "nyora";
+  CloudOptions, SyncOptions,
+} from "nyora-sdk";
 ```
 
 `Nyora` is also the **default export**:
 
 ```ts
-import Nyora from "nyora";
+import Nyora from "nyora-sdk";
 ```
 
 ## The `Nyora` client
 
-Create a client, use it, then `close()` it to release the embedded jsdom runtime.
+Create a client and call its `async` service methods. `close()` is a no-op kept
+for API compatibility — `fetch` needs no teardown.
 
 ```ts
-import { Nyora } from "nyora";
+import { Nyora } from "nyora-sdk";
 
 const client = new Nyora();
-try {
-  // ... use client.sources and client.manga ...
-} finally {
-  client.close();
-}
+// ... use client.sources and client.manga ...
+client.close();   // no-op
 ```
 
 A `Nyora` instance owns:
 
 - {@link Nyora.sources} — a {@link SourcesService}.
 - {@link Nyora.manga} — a {@link MangaService}.
-- {@link Nyora.ota} — the attached {@link OtaManager}.
+- {@link Nyora.cloud} — the underlying {@link CloudClient} transport.
 
-Constructor options (all optional, mainly for testing/sharing):
+Constructor options ({@link CloudOptions}, all optional):
 
 ```ts
-new Nyora({ ota?: OtaManager, runtime?: RuntimeLike });
+new Nyora({
+  baseUrl?: string,    // helper base URL; defaults to CLOUD_BASE_URL or $NYORA_BASE_URL
+  timeoutMs?: number,  // per-request timeout (default 120_000)
+});
 ```
 
 ## `client.sources` — {@link SourcesService}
 
-### `list(): Source[]`
+### `list(): Promise<Source[]>`
 
-Return every source in the bundled catalog.
+Return the sources currently loaded on the helper.
 
 ```ts
-const sources = client.sources.list();
+const sources = await client.sources.list();
 console.log(sources.length, "sources");
 console.log(sources[0]); // { id, name, lang, baseUrl, engine, isNsfw, ... }
 ```
 
-### `find(query: string): Source`
+### `catalog(): Promise<Source[]>`
 
-Resolve a source by a **case-insensitive** id or name substring. Throws if
-nothing matches.
+Return every source in the catalog, loaded or not.
 
 ```ts
-const source = client.sources.find("asura");   // by fuzzy name
-const md = client.sources.find("mangadex");     // by id
+const all = await client.sources.catalog();
 ```
 
-> Throws a plain `Error` (`No bundled source matched '<query>'`) when there is no
-> match — wrap it in `try/catch` if the query is user-supplied.
+### `find(query: string): Promise<Source>`
+
+Resolve a source over the full catalog by a **case-insensitive** id or name
+substring. Throws if nothing matches.
+
+```ts
+const source = await client.sources.find("asura");    // by fuzzy name
+const md = await client.sources.find("mangadex");       // by id
+```
+
+> Throws a plain `Error` (`No source matched '<query>'`) when there is no match —
+> wrap it in `try/catch` if the query is user-supplied.
 
 A {@link Source} has the shape:
 
@@ -100,7 +110,7 @@ interface Source {
   name: string;          // human-readable name
   lang: string;          // locale code, e.g. "en"
   baseUrl: string;       // site base URL
-  engine: string;        // "JavaScript"
+  engine: string;
   contentType: string;   // "Manga"
   isInstalled: boolean;
   isPinned: boolean;
@@ -116,7 +126,8 @@ interface Source {
 ## `client.manga` — {@link MangaService}
 
 All methods are `async` and take the **source id** (`source.id`) as the first
-argument.
+argument. If a source is not yet loaded on the helper, the client asks the helper
+to install it and retries once, transparently.
 
 ### `popular(sourceId, page = 1): Promise<SearchPage>`
 
@@ -154,7 +165,7 @@ interface SearchPage {
 ### `details(sourceId, mangaUrl, options?): Promise<MangaDetails>`
 
 Fetch full metadata plus the chapter list. Pass the known `title` to help the
-parser resolve the entry.
+helper resolve the entry.
 
 ```ts
 const details = await client.manga.details(source.id, hit.url, { title: hit.title });
@@ -191,104 +202,73 @@ sources require the `headers` (notably `Referer`) when you download the image.
 ## End-to-end
 
 ```ts
-import { Nyora } from "nyora";
+import { Nyora } from "nyora-sdk";
 
 const client = new Nyora();
-try {
-  const source = client.sources.find("mangadex");
-  const results = await client.manga.search(source.id, "Frieren");
-  const first = results.entries[0];
+const source = await client.sources.find("mangadex");
+const results = await client.manga.search(source.id, "Frieren");
+const first = results.entries[0];
 
-  const { manga, chapters } = await client.manga.details(source.id, first.url, {
-    title: first.title,
-  });
-  console.log(manga.title, "—", chapters.length, "chapters");
+const { manga, chapters } = await client.manga.details(source.id, first.url, {
+  title: first.title,
+});
+console.log(manga.title, "—", chapters.length, "chapters");
 
-  const pages = await client.manga.pages(source.id, chapters[0].url);
-  console.log(pages.map((p) => p.url));
-} finally {
-  client.close();
-}
+const pages = await client.manga.pages(source.id, chapters[0].url);
+console.log(pages.map((p) => p.url));
+```
+
+## Configuration
+
+The client resolves its helper base URL from, in order: the `baseUrl` option, the
+`NYORA_BASE_URL` environment variable, then the public default
+(`https://api.hasanraza.tech`, exported as {@link CLOUD_BASE_URL}).
+
+```ts
+// Explicit base URL:
+const client = new Nyora({ baseUrl: "http://127.0.0.1:8080" });
+
+// Or via the environment:
+//   NYORA_BASE_URL=http://127.0.0.1:8080 node app.js
 ```
 
 ## Error handling
 
-The SDK throws a small, typed hierarchy (all extend {@link NyoraError}):
+The SDK exposes a small, typed error hierarchy (all extend {@link NyoraError}):
 
 | Error | Thrown when |
 |---|---|
-| {@link NyoraError} | Base class for SDK failures (e.g. OTA manifest fetch). |
-| {@link ParserRuntimeError} | A parser is missing, a method is unknown, or the engine/parser fails. |
-| {@link NyoraHTTPError} | A helper returned a non-2xx HTTP response (carries `statusCode`, `body`). |
-| `Error` | `sources.find(...)` found no match. |
+| {@link NyoraError} | Base class for SDK failures. |
+| {@link NyoraHTTPError} | The helper returned a non-2xx HTTP response (carries `statusCode`, `body`). |
+| {@link HelperNotFoundError} | No running local helper could be discovered (port-file helpers). |
+| `Error` | `sources.find(...)` found no match, or a helper request failed with a message. |
 
 ```ts
-import { Nyora, ParserRuntimeError, NyoraError } from "nyora";
+import { Nyora, NyoraError } from "nyora-sdk";
 
 const client = new Nyora();
 try {
   const page = await client.manga.popular("does-not-exist");
 } catch (err) {
-  if (err instanceof ParserRuntimeError) {
-    console.error("parser failed:", err.message);
-  } else if (err instanceof NyoraError) {
+  if (err instanceof NyoraError) {
     console.error("nyora error:", err.message);
   } else {
-    throw err;
+    console.error("request failed:", (err as Error).message);
   }
-} finally {
-  client.close();
 }
 ```
 
-> **Tolerance note (helper path).** The embedded runtime is deliberately
-> tolerant: HTTP callbacks return the response body for **any** status code (and
-> `""` on a transport failure) instead of throwing, and HTML parsing never throws
-> on empty input. So a network hiccup or a `403` typically surfaces as an *empty*
-> result (e.g. `page.entries.length === 0`) rather than an exception. Check for
-> empty results, not just thrown errors.
+## Sync
 
-## OTA updates
-
-The client wraps the attached {@link OtaManager}:
+Account and library sync live in a separate {@link NyoraSync} client that talks to
+the Nyora sync server (`https://stream.hasanraza.tech`):
 
 ```ts
-// Apply an update and reload the runtime with the new parsers.
-const result = await client.update();          // OtaUpdateResult
-if (result.updated) console.log("now on OTA version", result.version);
+import { NyoraSync } from "nyora-sdk";
 
-// Force re-download:
-await client.update({ force: true });
-
-// Just check availability:
-const { available, installed, latest } = await client.checkUpdate();
+const sync = new NyoraSync();
+await sync.signIn("you@example.com", "password");
+const favs = await sync.select("nyora_favourite");
 ```
 
-A pinned bundle ships inside the package, so the SDK works offline on first run
-and only reaches the network when you call `update()` / `checkUpdate()` (or make
-source requests). See the **[OTA guide](ota.md)** for details.
-
-## Attaching to a running helper
-
-If you'd rather not run the engine in-process, you can talk to a running Nyora
-helper (the desktop app, another process, or `nyora-cli serve`) over its REST
-contract. The config helpers locate one:
-
-```ts
-import { readBaseUrlFromPortFile, defaultPortFile } from "nyora";
-
-const baseUrl = readBaseUrlFromPortFile();   // e.g. "http://127.0.0.1:54123" or null
-console.log("helper port file:", defaultPortFile());
-```
-
-You can then `fetch` the [REST endpoints](server.md) directly, or run your own
-{@link NyoraServer} to *be* the helper. See the **[Server guide](server.md)**.
-
-## Lifecycle & concurrency
-
-- Always call `client.close()` when done (use `try/finally`). It closes the jsdom
-  window.
-- A single client owns **one** jsdom runtime. For high-concurrency fan-out,
-  create multiple `Nyora` instances (or run a {@link NyoraServer} which serializes
-  calls onto one runtime). Within one client, interleaving many concurrent calls
-  is supported but shares a single engine.
+See the **[Sync guide](sync.md)** for the full surface.

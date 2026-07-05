@@ -1,6 +1,6 @@
 {
   "$schema": "https://typedoc.org/schema.json",
-  "entryPoints": ["src/index.ts", "src/cli.ts", "src/server.ts"],
+  "entryPoints": ["src/index.ts", "src/cli.ts", "src/cloud.ts", "src/sync.ts"],
   "tsconfig": "./tsconfig.json",
   "out": "/Users/hasanraza/Desktop/kotatsu/Nyora/nyora-site/public/docs/js",
   "name": "Nyora (JavaScript)",
@@ -13,8 +13,7 @@
     "docs/library.md",
     "docs/cli.md",
     "docs/tui.md",
-    "docs/server.md",
-    "docs/ota.md",
+    "docs/sync.md",
     "docs/agents.md"
   ],
   "navigationLinks": {
