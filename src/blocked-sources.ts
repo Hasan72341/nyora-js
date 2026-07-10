@@ -5,7 +5,18 @@
 // from the catalog. IDs match the cloud helper's bare source id (no prefix).
 // 597 disabled of 960 (363 working remain). Regenerate periodically.
 
-/** Source ids hidden from `list()` / `catalog()` because they are dead or Cloudflare-walled. */
+/**
+ * True if `id` is a dead / Cloudflare-walled source.
+ *
+ * The cloud helper returns prefixed ids (`parser:NAME`) while the set stores
+ * bare names, so the prefix is stripped before comparison.
+ */
+export function isBlockedSource(id: string): boolean {
+  const bare = id.includes(":") ? id.slice(id.lastIndexOf(":") + 1) : id;
+  return BLOCKED_SOURCE_IDS.has(bare);
+}
+
+/** Bare source names hidden from `list()` / `catalog()` — dead or Cloudflare-walled. */
 export const BLOCKED_SOURCE_IDS: ReadonlySet<string> = new Set([
   "ADONISFANSUB",
   "ADULT_WEBTOON",

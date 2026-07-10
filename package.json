@@ -1,7 +1,7 @@
 {
   "name": "nyora-sdk",
-  "version": "2.0.2",
-  "description": "JavaScript/TypeScript SDK, CLI and TUI for Nyora manga sources. Runs Nyora's over-the-air (OTA) parser bundle in-process via jsdom — no JVM helper required — with an OTA updater, a helper-compatible REST server, and an interactive terminal UI.",
+  "version": "2.0.3",
+  "description": "The manga reader SDK for JavaScript & TypeScript — build a manga, manhwa or manhua reader with 363 working sources across 40 languages through one typed cloud API. Search, browse, read chapters, download pages and cloud-sync a library. A programmatic Tachiyomi / Mihon / Kotatsu alternative, with a CLI and an interactive terminal reader (TUI).",
   "type": "module",
   "license": "Apache-2.0",
   "author": "Md Hasan Raza",
@@ -15,16 +15,23 @@
   },
   "keywords": [
     "manga",
-    "nyora",
+    "manga-reader",
+    "manga-api",
+    "manga-sdk",
+    "manhwa",
+    "manhua",
+    "webtoon",
+    "comics",
     "reader",
+    "tachiyomi",
+    "mihon",
+    "kotatsu",
+    "nyora",
+    "sources",
     "cli",
     "tui",
-    "ota",
-    "scraper",
-    "parsers",
-    "sources",
-    "jsdom",
-    "sdk"
+    "sdk",
+    "typescript"
   ],
   "engines": {
     "node": ">=18"

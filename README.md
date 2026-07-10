@@ -2,13 +2,15 @@
 
 <img src="https://nyora.pages.dev/icon.png" width="120" alt="Nyora" />
 
-# Nyora — JavaScript
+# Nyora — the manga reader SDK for JavaScript & TypeScript
 
-### Read like the world can wait.
+### Build your own manga, manhwa & manhua reader in ~10 lines.
 
-The official **Node.js / TypeScript** SDK for **Nyora** — a thin cloud client
-that scripts your library, browses **~960 manga sources**, and fetches chapters
-and pages straight from JavaScript. `npm install`, create a client, done.
+**`nyora-sdk`** is the official Node.js / TypeScript SDK for [Nyora](https://nyora.pages.dev) —
+a thin cloud client that gives you **363 live, health-checked sources across 40 languages**
+through one typed API: search, browse, read chapters, download pages, and sync a library
+across devices. No scraper to maintain, no JVM, no jsdom, no parser bundle — `npm install
+nyora-sdk` and you're reading in 60 seconds.
 
 <p>
   <img alt="Node.js" src="https://img.shields.io/badge/Node.js-%3E%3D18-339933?style=for-the-badge&logo=node.js&logoColor=white" />
@@ -19,217 +21,264 @@ and pages straight from JavaScript. `npm install`, create a client, done.
 
 </div>
 
+> **In one line:** Nyora is the programmatic, cross-platform **Tachiyomi / Mihon /
+> Kotatsu alternative** — a manga API and reader SDK you can `import`. If you're
+> building a manga reader, a Discord/Telegram bot, a downloader, or a library manager
+> in JavaScript or TypeScript, this is the fastest way to get **hundreds of working
+> sources** without writing or maintaining a single scraper.
+
 ---
 
-## What it is
+## Table of contents
 
-`nyora-sdk` is a **thin cloud client** for the Nyora manga engine. It talks to the
-public **Nyora cloud helper** at `https://api.hasanraza.tech` — the
-kotatsu-parsers JVM engine with **~960 sources** — over a small typed REST API.
-Nothing runs in-process: no jsdom, no parser bundle, no JVM, no Java. A bare
-`new Nyora()` points at the cloud by default, so you get the full catalog the
-moment you install.
+- [Why Nyora](#why-nyora)
+- [Install](#install)
+- [Quickstart — a working reader in 10 lines](#quickstart)
+- [Core concepts](#core-concepts)
+- [API reference](#api-reference)
+- [Recipes](#recipes)
+- [Chapter ordering (ascending vs descending sources)](#chapter-ordering)
+- [Cloud sync — a library across devices](#cloud-sync)
+- [Command line (`nyora-cli`)](#command-line)
+- [Interactive terminal reader (TUI)](#terminal-reader)
+- [How it works](#how-it-works)
+- [FAQ](#faq)
+- [Ecosystem](#ecosystem)
 
-This one install gives you three surfaces:
+---
 
-- a **library** you `import { Nyora } from "nyora-sdk"` to script from your code,
-- the **`nyora-cli`** command (one-shot subcommands + JSON output),
-- a **terminal reader (TUI)**, plus **Nyora Cloud Sync** for a signed-in library.
+## Why Nyora
+
+| | |
+|---|---|
+| 📚 **363 working sources** | Every source is live health-checked; 597 dead or Cloudflare-walled ones are auto-hidden, so `list()`/`catalog()` return only sources that actually work — **363 across 40 languages** (268 all-ages, 95 mature). |
+| 🌐 **One typed API** | `Source`, `Manga`, `MangaChapter`, `MangaPage`, `MangaDetails` — full TypeScript types, ESM, ships `.d.ts`. |
+| ☁️ **Cloud-powered** | The [kotatsu-parsers](https://github.com/KotatsuApp/kotatsu-parsers) engine runs server-side. You get parsed results, not scraping headaches — no jsdom, no JVM, no bundle in-process. |
+| 🔀 **Correct chapter order** | Built-in `nextChapter()` / `previousChapter()` work on both ascending (MangaDex `0→N`) and descending (scanlation `N→0`) sources — no off-by-one "next goes backwards" bug. |
+| 🧰 **Batteries included** | A CLI, an interactive terminal reader (TUI), a page downloader, and cross-device cloud sync — all in one `npm install`. |
+| 🟦 **TypeScript-first** | Written in TS, Promise-based, works in Node 18+ and modern runtimes. |
+
+<a name="install"></a>
+## Install
 
 ```bash
-npm install nyora-sdk
+npm install nyora-sdk       # or: pnpm add nyora-sdk / yarn add nyora-sdk
 ```
 
-The package is ESM (`"type": "module"`) and ships TypeScript declarations.
+Node 18+. ESM (`import`). Nothing else — the parser engine lives in the cloud.
 
-📖 Full documentation: **[nyora.pages.dev/docs/js](https://nyora.pages.dev/docs/js/)**
-
----
-
-## Quickstart
+<a name="quickstart"></a>
+## Quickstart — a working reader in 10 lines
 
 ```ts
-import { Nyora } from "nyora-sdk";
-
-const client = new Nyora();                              // defaults to the Nyora cloud
-const source = await client.sources.find("mangadex");    // resolve by id or fuzzy name
-const page = await client.manga.popular(source.id);      // SearchPage of entries
-const entry = page.entries[0];
-
-const details = await client.manga.details(source.id, entry.url, { title: entry.title });
-const pages = await client.manga.pages(source.id, details.chapters[0].url);
-
-for (const p of pages) console.log(p.url);               // page image URLs
-client.close();                                          // no-op, kept for symmetry
-```
-
-The client exposes two typed services:
-
-- **`client.sources`** — `list()` the loaded sources, `catalog()` the full
-  ~960-source catalog, or `find(query)` by **id** or fuzzy **name**.
-- **`client.manga`** — `popular(...)`, `latest(...)`, `search(...)`,
-  `details(...)`, and `pages(...)`.
-
-### List and search sources
-
-```ts
-import { Nyora } from "nyora-sdk";
+import Nyora, { readingOrder } from "nyora-sdk";
 
 const client = new Nyora();
 
-for (const src of (await client.sources.catalog()).slice(0, 10)) {
-  console.log(src.id, src.name, src.lang);
-}
+const source = await client.sources.find("mangadex");          // any of 363 sources
+const hits = await client.manga.search(source.id, "frieren");  // search it
+const manga = hits.entries[0];
 
-const src = await client.sources.find("asura");
-const results = await client.manga.search(src.id, "Solo Leveling");
-console.log(results.entries[0].title);
+const details = await client.manga.details(source.id, manga.url, { title: manga.title });
+const first = readingOrder(details.chapters)[0];               // earliest chapter, order-safe
+
+const pages = await client.manga.pages(source.id, first.url, { branch: first.branch });
+pages.forEach((p) => console.log(p.url));                      // image URLs, ready to render
 ```
 
-### Browse popular / latest
+That's a complete read path: **source → search → details → chapter → page images.**
+Point an `<img>` (or a React Native / Electron / canvas view) at those URLs and you have a reader.
+
+<a name="core-concepts"></a>
+## Core concepts
+
+A source exposes manga; a manga has chapters; a chapter has pages. Every step is one call.
+
+```
+Nyora ─┬─ sources → Source        (a content site: MangaDex, Bato, …)
+       └─ manga   → Manga          (a series: title, coverUrl, authors, tags)
+                   → MangaDetails  (Manga + its MangaChapter list)
+                   → MangaChapter  (id, title, number, url, branch, uploadDate)
+                   → MangaPage      (a single image url)
+```
+
+Every value is a plain typed object — `JSON.stringify()` to serialise, full `.d.ts` types throughout.
+
+<a name="api-reference"></a>
+## API reference
+
+### Client
 
 ```ts
-const src = (await client.sources.find("mangadex")).id;
+new Nyora(options?)   // options.baseUrl defaults to https://api.hasanraza.tech
+```
 
-const popular = await client.manga.popular(src, 1);
-const latest = await client.manga.latest(src, 1);
+Attributes: `client.sources`, `client.manga`, `client.cloud` (raw transport).
 
-for (const entry of popular.entries.slice(0, 5)) {
-  console.log(entry.title, "—", entry.url);
+### `client.sources`
+
+| Method | Returns | Description |
+|---|---|---|
+| `list()` | `Promise<Source[]>` | Loaded sources (dead ones hidden). |
+| `catalog()` | `Promise<Source[]>` | Every available source (dead ones hidden). |
+| `find(query)` | `Promise<Source>` | First source whose id or name matches (case-insensitive). |
+
+### `client.manga`
+
+| Method | Returns | Description |
+|---|---|---|
+| `popular(sourceId, page=1)` | `Promise<SearchPage>` | Popular titles from a source. |
+| `latest(sourceId, page=1)` | `Promise<SearchPage>` | Recently updated titles. |
+| `search(sourceId, query, page=1)` | `Promise<SearchPage>` | Search one source. |
+| `details(sourceId, mangaUrl, { title? })` | `Promise<MangaDetails>` | Full metadata **+ chapter list**. |
+| `pages(sourceId, chapterUrl, { branch? })` | `Promise<MangaPage[]>` | A chapter's image pages. |
+
+`SearchPage` has `.entries: Manga[]` and `.hasNextPage: boolean` for pagination.
+
+### Chapter ordering helpers
+
+```ts
+import { nextChapter, previousChapter, readingOrder, chapterReadingDelta } from "nyora-sdk";
+
+nextChapter(chapters, current);      // -> MangaChapter | null
+previousChapter(chapters, current);  // -> MangaChapter | null
+readingOrder(chapters);              // -> MangaChapter[], earliest-first
+chapterReadingDelta(chapters);       // -> 1 (ascending) or -1 (descending)
+```
+
+<a name="recipes"></a>
+## Recipes
+
+**Browse popular with pagination**
+
+```ts
+let page = await client.manga.popular(source.id, 1);
+for (;;) {
+  page.entries.forEach((m) => console.log(m.title));
+  if (!page.hasNextPage) break;
+  page = await client.manga.popular(source.id, page.number + 1);
 }
 ```
 
-### Details and pages
+**Read a chapter, then move to the next one (order-independent)**
 
 ```ts
-const src = (await client.sources.find("mangadex")).id;
-const entry = (await client.manga.popular(src)).entries[0];
-
-const details = await client.manga.details(src, entry.url);   // metadata + chapter list
-console.log(details.manga.title, "-", details.chapters.length, "chapters");
-
-const pages = await client.manga.pages(src, details.chapters[0].url, { branch: undefined });
-console.log(pages.map((p) => p.url));
+let chapter = readingOrder(details.chapters)[0];
+while (chapter) {
+  const pages = await client.manga.pages(source.id, chapter.url, { branch: chapter.branch });
+  render(pages);                                   // your UI
+  chapter = nextChapter(details.chapters, chapter); // null at the end
+}
 ```
 
-> Point the client somewhere else with `new Nyora({ baseUrl })` or the
-> `NYORA_BASE_URL` environment variable — otherwise it uses
-> `https://api.hasanraza.tech`.
+**Download a chapter's pages**
 
----
+```ts
+import { writeFile } from "node:fs/promises";
 
-## Cloud Sync
+const pages = await client.manga.pages(source.id, chapter.url, { branch: chapter.branch });
+await Promise.all(
+  pages.map(async (p, i) => {
+    const buf = Buffer.from(await (await fetch(p.url)).arrayBuffer());
+    await writeFile(`page-${String(i + 1).padStart(3, "0")}.jpg`, buf);
+  }),
+);
+```
 
-`NyoraSync` is Nyora's account + library sync. It signs in against the sync
-server `https://stream.hasanraza.tech` (OAuth2 password grant + rotating JWT),
-then does last-write-wins `upsert`/`select` over your per-user tables
-(`nyora_manga`, `nyora_favourite`, `nyora_history`, `nyora_bookmark`, …). **One
-account is shared across the iOS app, the TUI, and the SDKs** — favourite a manga
-anywhere and it shows up everywhere.
+<a name="chapter-ordering"></a>
+## Chapter ordering (ascending vs descending sources)
+
+Different sources return chapters in different orders — MangaDex lists oldest-first
+(`0 → N`), many scanlation sites list newest-first (`N → 0`). A naive `chapters[i+1]`
+"next chapter" therefore goes **backwards** on half of all sources. Nyora detects the
+direction from the chapter numbers so navigation is always correct:
+
+```ts
+const nxt = nextChapter(details.chapters, current);     // always the LATER chapter
+const prv = previousChapter(details.chapters, current); // always the EARLIER chapter
+```
+
+<a name="cloud-sync"></a>
+## Cloud sync — a library across devices
 
 ```ts
 import { NyoraSync } from "nyora-sdk";
 
-const sync = new NyoraSync();                       // -> https://stream.hasanraza.tech
-
-await sync.register("me@example.com", "hunter2");   // or sync.signIn(...) if you have an account
-await sync.signIn("me@example.com", "hunter2");
-
-// Push favourites (last-write-wins upsert)
-await sync.upsert("nyora_favourite", [
-  { manga_id: "abc123", source: "mangadex", title: "Solo Leveling" },
-]);
-
-// Pull them back (optionally only rows changed after an ISO timestamp)
-const rows = await sync.select("nyora_favourite");
-console.log(rows);
-
-sync.signOut();
+const sync = new NyoraSync();
+await sync.signIn("you@example.com", "password");     // or register(...)
+await sync.upsert("nyora_favourite", [{ manga_id: manga.url, sort_key: 0 }]);
+const favs = await sync.select("nyora_favourite");     // syncs across every Nyora app
 ```
 
-- **Methods:** `register`, `signIn`, `signOut`, `upsert(table, rows)`,
-  `select(table, since?)`, plus the `isSignedIn` getter.
-- **Tokens persist** to `~/.config/nyora/sync.json` (respects `XDG_CONFIG_HOME`),
-  so a session survives restarts. `signOut()` deletes them.
-- Access tokens auto-refresh on a `401` using the stored refresh token.
+Same account and library as the Nyora apps on Android, iOS, macOS, Windows, Linux and web.
 
----
-
+<a name="command-line"></a>
 ## Command line (`nyora-cli`)
 
-Install globally to put `nyora-cli` (aliased as `nyora`) on your `PATH`:
-
 ```bash
-npm install -g nyora-sdk
+npx nyora-cli sources --search mangadex        # list/filter sources
+npx nyora-cli popular  -s MANGADEX             # popular titles
+npx nyora-cli search   -s MANGADEX "frieren"   # search
+npx nyora-cli details  -s MANGADEX <manga-url> # metadata + chapters
+npx nyora-cli pages    -s MANGADEX <chap-url>  # page image URLs
+npx nyora-cli download -s MANGADEX <chap-url>  # save pages
+npx nyora-cli --json popular -s MANGADEX       # machine-readable output
 ```
 
-> **Running bare `nyora-cli` launches the terminal reader (TUI).** Pass a
-> subcommand for a one-shot command instead. Without a global install, run it as
-> `node dist/cli.js <command>` or `npx nyora-sdk <command>`.
+Both `nyora` and `nyora-cli` binaries are installed. Add `--json` to any command for scripting.
+
+<a name="terminal-reader"></a>
+## Interactive terminal reader (TUI)
 
 ```bash
-nyora-cli                                    # no subcommand -> launches the TUI
-nyora-cli sources --search asura
-nyora-cli popular -s mangadex
-nyora-cli search  -s asura "Solo Leveling"
-nyora-cli details -s mangadex "<manga-url>"
-nyora-cli pages   -s mangadex "<chapter-url>"
-nyora-cli download -s mangadex -o ./out "<chapter-url>"   # save chapter as a .cbz
-nyora-cli version
+npx nyora            # launch the interactive reader — browse, search, read
 ```
 
-Add `--json` before any subcommand for machine-readable output:
+Pick a source → search or browse → open a chapter → page through it, with
+order-independent **next / previous chapter** navigation.
 
-```bash
-nyora-cli --json popular -s mangadex | jq '.entries[].title'
-```
+<a name="how-it-works"></a>
+## How it works
 
-When stdout is not a TTY (piped, redirected, CI), bare `nyora-cli` prints a
-friendly notice and exits `0` instead of starting the TUI.
+`nyora-sdk` is a **thin cloud client**. It speaks a small typed REST API to the public
+**Nyora cloud helper** (`https://api.hasanraza.tech`) — the kotatsu-parsers JVM engine
+with hundreds of sources — so nothing runs in-process: no jsdom, no parser bundle, no
+JVM, no Java. Dead and Cloudflare-blocked sources are filtered out client-side from a
+periodically refreshed health-check, so you only ever see the **363 sources that actually
+return content**. Self-host the helper and set `baseUrl` if you'd rather run your own.
 
----
+<a name="faq"></a>
+## FAQ
 
-## Terminal reader (TUI)
+**How do I build a manga reader in JavaScript / TypeScript?**
+`npm install nyora-sdk`, then `search → details → pages` (see [Quickstart](#quickstart)).
+`client.manga.pages(...)` returns image URLs you can drop into an `<img>` or any UI.
 
-Run bare `nyora-cli` (or `node dist/cli.js`) to open the terminal reader: pick a
-source, browse popular/latest/search, open a title, and page through a chapter.
+**What's the best manga API / SDK?**
+Nyora gives you 363 working, health-checked sources across 40 languages behind one typed
+TypeScript API — no scraper maintenance, plus a CLI, TUI, downloader and cloud sync.
 
-The TUI is also the front-end for **Cloud Sync**:
+**Is this a Tachiyomi / Mihon / Kotatsu alternative?**
+Yes — it's the *programmatic* one. Those are Android apps; Nyora is an importable SDK
+(and cross-platform apps) built on the same open-source Kotatsu parser engine.
 
-- Type **`sync`** at the source filter to open the account menu (sign in /
-  register / sign out).
-- Type **`lib`** to browse your synced library.
-- When signed in, a manga's details show a **"Favourite to library?"** prompt —
-  favourites sync to your cloud account.
+**Do I need to run a server, jsdom or a JVM?**
+No. The engine is hosted. `npm install` and go. You *can* self-host and set `baseUrl`.
 
----
+**Manga, manhwa or manhua?** All three — the sources cover Japanese, Korean and Chinese
+comics across 40 languages.
 
-## Installation
+**Python?** Use the sibling SDK: [`nyora`](https://pypi.org/project/nyora/) (`pip install nyora`).
 
-```bash
-npm install nyora-sdk        # as a dependency (library + nyora-cli)
-npm install -g nyora-sdk     # global: puts `nyora-cli` (and `nyora`) on PATH
-```
+<a name="ecosystem"></a>
+## Ecosystem
 
-Requires **Node.js 18+** and a network connection (all catalog/parsing work
-happens on the Nyora cloud helper).
+- **Python SDK** — [`nyora`](https://pypi.org/project/nyora/) (`pip install nyora`)
+- **Apps** — Android, iOS/iPadOS, macOS, Windows, Linux and a web app: <https://nyora.pages.dev>
+- **Docs** — <https://nyora.pages.dev/docs/js/>
+- **Source** — <https://github.com/Hasan72341/nyora-js>
 
----
+## License
 
-## Also from Nyora
-
-Nyora is a complete manga ecosystem — native apps for Android/iOS/macOS/Windows/
-Linux/Web, a Python SDK (`pip install nyora`), and drop-in extensions:
-**[nyora-mihon](https://github.com/Hasan72341/nyora-mihon)** brings the whole
-catalog to stock Mihon and **[nyora-aidoku](https://github.com/Hasan72341/nyora-aidoku)**
-brings it to stock Aidoku on iOS — no app modification required.
-
----
-
-## Privacy & license
-
-No ads, no tracking, no telemetry. `nyora-sdk` is fully auditable, Apache-2.0
-open-source code. Developed and maintained by **Md Hasan Raza** —
-[GitHub](https://github.com/Hasan72341).
-
-> Nyora is not affiliated with any of the manga sources it can access.
+Apache-2.0. Nyora is built on the open-source Kotatsu parser engine and is not affiliated
+with Tachiyomi, Mihon or Kotatsu.
