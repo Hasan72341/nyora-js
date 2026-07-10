@@ -12,6 +12,7 @@
  * @packageDocumentation
  */
 
+import { BLOCKED_SOURCE_IDS } from "./blocked-sources.js";
 import { CloudClient, type CloudOptions } from "./cloud.js";
 import {
   mangaDetailsFromJson,
@@ -45,13 +46,17 @@ export class SourcesService {
   /** List the sources currently loaded on the helper. */
   async list(): Promise<Source[]> {
     const data = await this.cloud.get<{ sources?: JsonDict[]; entries?: JsonDict[] }>("/sources");
-    return (data.sources ?? data.entries ?? []).map((item) => sourceFromJson(item));
+    return (data.sources ?? data.entries ?? [])
+      .map((item) => sourceFromJson(item))
+      .filter((s) => !BLOCKED_SOURCE_IDS.has(s.id));
   }
 
   /** List every source in the catalog (loaded or not). */
   async catalog(): Promise<Source[]> {
     const data = await this.cloud.get<{ entries?: JsonDict[] }>("/sources/catalog");
-    return (data.entries ?? []).map((item) => sourceFromJson(item));
+    return (data.entries ?? [])
+      .map((item) => sourceFromJson(item))
+      .filter((s) => !BLOCKED_SOURCE_IDS.has(s.id));
   }
 
   /** Find a source by case-insensitive id or name substring. */

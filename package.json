@@ -1,6 +1,6 @@
 {
   "name": "nyora-sdk",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "JavaScript/TypeScript SDK, CLI and TUI for Nyora manga sources. Runs Nyora's over-the-air (OTA) parser bundle in-process via jsdom — no JVM helper required — with an OTA updater, a helper-compatible REST server, and an interactive terminal UI.",
   "type": "module",
   "license": "Apache-2.0",
