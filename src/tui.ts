@@ -15,6 +15,7 @@
  */
 
 import { Nyora } from "./client.js";
+import { nextChapter, previousChapter } from "./ordering.js";
 import { NyoraSync } from "./sync.js";
 import type { Manga, MangaChapter, MangaDetails, SearchPage, Source } from "./types.js";
 
@@ -414,27 +415,50 @@ async function showDetails(
       ],
     });
     if (choice === BACK) return;
-    await showPages(prompts, client, source, choice);
+    // Reading a chapter can hand back the next/previous chapter (order-independent)
+    // so the reader flows on without bouncing back to the chapter list.
+    let chapter: MangaChapter | null = choice;
+    while (chapter !== null) {
+      chapter = await showPages(prompts, client, source, chapter, details);
+    }
   }
 }
 
-/** Resolve and print a chapter's page image URLs. */
+/**
+ * Resolve and print a chapter's page image URLs, then offer to move to the
+ * next/previous chapter. Returns the chosen neighbouring chapter to keep
+ * reading, or `null` to return to the chapter list.
+ */
 async function showPages(
   prompts: Prompts,
   client: Nyora,
   source: Source,
   chapter: MangaChapter,
-): Promise<void> {
+  details: MangaDetails,
+): Promise<MangaChapter | null> {
   const [pages, err] = await safe(() =>
     client.manga.pages(source.id, chapter.url, { branch: chapter.branch }),
   );
   if (err || !pages) {
     process.stdout.write(`Failed to load pages: ${err ?? "unknown error"}\n`);
-    return;
+    return null;
   }
   process.stdout.write(`\n${chapter.title || chapter.id} — ${pages.length} pages\n`);
   pages.forEach((p, i) => {
     process.stdout.write(`${String(i + 1).padStart(3)}. ${p.url}\n`);
   });
-  await prompts.input({ message: "Press Enter to go back" });
+
+  // Neighbours are resolved order-independently, so "next" is always the later
+  // chapter regardless of whether the source sorted ascending or descending.
+  const nxt = nextChapter(details.chapters, chapter);
+  const prv = previousChapter(details.chapters, chapter);
+  const choices: { name: string; value: MangaChapter | typeof BACK }[] = [];
+  if (nxt) choices.push({ name: "next chapter >", value: nxt });
+  if (prv) choices.push({ name: "< previous chapter", value: prv });
+  choices.push({ name: "< back to chapters", value: BACK });
+  const choice = await prompts.select<MangaChapter | typeof BACK>({
+    message: "Continue reading",
+    choices,
+  });
+  return choice === BACK ? null : choice;
 }

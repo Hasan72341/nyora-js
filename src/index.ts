@@ -46,6 +46,14 @@ export {
 } from "./errors.js";
 
 export {
+  chapterReadingDelta,
+  readingOrder,
+  adjacentChapter,
+  nextChapter,
+  previousChapter,
+} from "./ordering.js";
+
+export {
   mangaPageFromJson,
   mangaChapterFromJson,
   mangaFromJson,
