@@ -2,7 +2,7 @@
 
 <img src="https://nyora.xyz/icon.png" width="120" alt="Nyora" />
 
-# Nyora — the manga reader SDK for JavaScript & TypeScript
+# Nyora — the manga reader SDK for JavaScript & TypeScript (No Longer Maintained)
 
 ### Build your own manga, manhwa & manhua reader in ~10 lines.
 
